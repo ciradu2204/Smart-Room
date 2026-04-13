@@ -100,6 +100,27 @@ function subscribeToTopics() {
     if (err) console.error('[MQTT] Subscribe error (sensors):', err.message)
     else console.log(`[MQTT] Subscribed to ${TOPIC_PREFIX}/rooms/+/sensors`)
   })
+
+  // 3. On every (re)connect, refresh the per-room snapshots so any device
+  // that joins after a broker restart gets a current upcoming-bookings list.
+  refreshAllRoomSnapshots().catch((err) =>
+    console.error('[MQTT] Snapshot refresh on connect failed:', err.message)
+  )
+}
+
+/**
+ * Iterate every known room and publish its upcoming-bookings snapshot.
+ * Called on broker (re)connect and on server startup.
+ */
+async function refreshAllRoomSnapshots() {
+  const { data: rooms, error } = await supabase.from('rooms').select('id')
+  if (error) {
+    console.error('[MQTT:Snapshot] Failed to list rooms:', error.message)
+    return
+  }
+  for (const r of rooms || []) {
+    await publishRoomSnapshot(r.id)
+  }
 }
 
 // ───────────────────────────────────────────────
@@ -256,33 +277,15 @@ function subscribeToBookingChanges() {
     })
 }
 
-/**
- * Publish a booking change to the ESP32 device for that room.
- */
-async function publishBookingToDevice(booking) {
-  if (!booking || !booking.room_id) return
+// Kigali is UTC+2 (Central Africa Time, no DST)
+const KIGALI_OFFSET_SECONDS = 2 * 60 * 60
 
-  // Fetch user display name for the booking
-  let userName = null
-  if (booking.user_id) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', booking.user_id)
-      .single()
-    userName = profile?.display_name || null
-  }
-
-  // Kigali is UTC+2 (Central Africa Time, no DST)
-  const KIGALI_OFFSET_SECONDS = 2 * 60 * 60
-
+function bookingToWirePayload(booking, userName) {
   // Convert ISO strings to Unix epoch seconds, shifted to Kigali local time
   // so the ESP32 can use the values directly without timezone math.
   const startEpoch = Math.floor(new Date(booking.start_time).getTime() / 1000) + KIGALI_OFFSET_SECONDS
-  const endEpoch = Math.floor(new Date(booking.end_time).getTime() / 1000) + KIGALI_OFFSET_SECONDS
-
-  const topic = `${TOPIC_PREFIX}/${booking.room_id}/booking`
-  const payload = {
+  const endEpoch   = Math.floor(new Date(booking.end_time).getTime()   / 1000) + KIGALI_OFFSET_SECONDS
+  return {
     bookingId: booking.id,
     userId: booking.user_id,
     userName,
@@ -291,9 +294,67 @@ async function publishBookingToDevice(booking) {
     timezone: 'Africa/Kigali',
     status: booking.status,
   }
+}
 
-  publish(topic, payload)
+async function fetchUserName(userId) {
+  if (!userId) return null
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return profile?.display_name || null
+}
+
+/**
+ * Publish the full set of upcoming bookings for a room as a single retained
+ * snapshot. ESP32 devices subscribe to this topic and rebuild their slot table
+ * whenever a snapshot arrives — so a fresh boot or a calendar open immediately
+ * shows the day's bookings instead of starting empty.
+ */
+async function publishRoomSnapshot(roomId) {
+  if (!roomId) return
+
+  const nowIso = new Date().toISOString()
+  const { data: bookings, error } = await supabase
+    .from('bookings')
+    .select('id, user_id, start_time, end_time, status')
+    .eq('room_id', roomId)
+    .in('status', ['scheduled', 'active'])
+    .gte('end_time', nowIso)
+    .order('start_time', { ascending: true })
+    .limit(20)
+
+  if (error) {
+    console.error(`[MQTT:Snapshot] Failed to fetch bookings for ${roomId}:`, error.message)
+    return
+  }
+
+  const items = []
+  for (const b of bookings || []) {
+    const userName = await fetchUserName(b.user_id)
+    items.push(bookingToWirePayload(b, userName))
+  }
+
+  const topic = `${TOPIC_PREFIX}/${roomId}/bookings/snapshot`
+  publish(topic, { roomId, generatedAt: nowIso, bookings: items })
+  console.log(`[MQTT:Snapshot] Published ${items.length} bookings to ${topic}`)
+}
+
+/**
+ * Publish a booking change to the ESP32 device for that room.
+ */
+async function publishBookingToDevice(booking) {
+  if (!booking || !booking.room_id) return
+
+  const userName = await fetchUserName(booking.user_id)
+  const topic = `${TOPIC_PREFIX}/${booking.room_id}/booking`
+  publish(topic, bookingToWirePayload(booking, userName))
   console.log(`[MQTT:Out] Published booking ${booking.id} to ${topic}`)
+
+  // Refresh the per-room snapshot so the ESP32's local calendar stays in sync
+  // with the database for the whole upcoming-bookings list.
+  await publishRoomSnapshot(booking.room_id)
 }
 
 // ───────────────────────────────────────────────
@@ -302,13 +363,19 @@ async function publishBookingToDevice(booking) {
 
 /**
  * Publish a JSON message to a topic.
+ *
+ * Booking topics are published with `retain: true` so that an ESP32 joining
+ * the broker mid-stream immediately receives the latest booking state for its
+ * room. Without retention a freshly-booted device has no way to learn about
+ * existing bookings until the next INSERT/UPDATE fires.
  */
 export function publish(topic, payload) {
   if (!client || !client.connected) {
     console.warn('[MQTT] Client not connected, queuing publish skipped')
     return false
   }
-  client.publish(topic, JSON.stringify(payload), { qos: 1 })
+  const retain = topic.endsWith('/booking') || topic.endsWith('/bookings/snapshot')
+  client.publish(topic, JSON.stringify(payload), { qos: 1, retain })
   return true
 }
 
