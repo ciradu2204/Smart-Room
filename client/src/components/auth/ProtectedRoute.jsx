@@ -6,13 +6,10 @@ export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  console.log('[ProtectedRoute] loading:', loading, 'user:', !!user)
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Skeleton width="160px" height="20px" />
-        <p className="text-xs text-gray-400 mt-2">Loading auth...</p>
       </div>
     )
   }

@@ -89,7 +89,16 @@ export default function ScheduleForm({ slots, onChange, onSave, saving }) {
   const [errors, setErrors] = useState({})
 
   function updateSlot(id, field, value) {
-    onChange(slots.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
+    onChange(slots.map((s) => {
+      if (s.id !== id) return s
+      const updated = { ...s, [field]: value }
+      // If start time changed and end time is now invalid, bump end time forward
+      if (field === 'startTime' && updated.endTime <= value) {
+        const next = TIME_OPTIONS.find((opt) => opt.value > value)
+        if (next) updated.endTime = next.value
+      }
+      return updated
+    }))
     // Clear error for this slot on change
     if (errors[id]) {
       setErrors((prev) => {

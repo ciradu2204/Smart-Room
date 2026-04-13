@@ -26,6 +26,8 @@ function createConnectionOptions() {
     connectTimeout: 10000,
     keepalive: 60,
     clean: true,
+    // TLS support for cloud brokers (mqtts:// URLs)
+    rejectUnauthorized: true,
   }
   if (process.env.MQTT_USERNAME) {
     opts.username = process.env.MQTT_USERNAME
@@ -271,13 +273,22 @@ async function publishBookingToDevice(booking) {
     userName = profile?.display_name || null
   }
 
+  // Kigali is UTC+2 (Central Africa Time, no DST)
+  const KIGALI_OFFSET_SECONDS = 2 * 60 * 60
+
+  // Convert ISO strings to Unix epoch seconds, shifted to Kigali local time
+  // so the ESP32 can use the values directly without timezone math.
+  const startEpoch = Math.floor(new Date(booking.start_time).getTime() / 1000) + KIGALI_OFFSET_SECONDS
+  const endEpoch = Math.floor(new Date(booking.end_time).getTime() / 1000) + KIGALI_OFFSET_SECONDS
+
   const topic = `${TOPIC_PREFIX}/${booking.room_id}/booking`
   const payload = {
     bookingId: booking.id,
     userId: booking.user_id,
     userName,
-    startTime: booking.start_time,
-    endTime: booking.end_time,
+    startTime: startEpoch,
+    endTime: endEpoch,
+    timezone: 'Africa/Kigali',
     status: booking.status,
   }
 
