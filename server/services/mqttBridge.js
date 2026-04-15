@@ -176,9 +176,9 @@ function handleMessage(topic, message) {
  * the device, so we subtract KIGALI_OFFSET_SECONDS to get true UTC epoch
  * for the DB INSERT.
  *
- * The booking is inserted with user_id = null (no authenticated user at the
- * panel) and a device-generated id so the ESP32's local wu_<epoch> id lines
- * up with the DB row. The title carries the purpose picked on the panel.
+ * The booking is attributed to WALK_UP_USER_ID (admin service account)
+ * since the panel has no per-user auth. The title carries the purpose
+ * picked on the panel so walk-ups remain distinguishable in the DB.
  */
 async function handleWalkUpBooking(roomId, payload) {
   const { bookingId, title, startTime, endTime } = payload || {}
@@ -192,7 +192,7 @@ async function handleWalkUpBooking(roomId, payload) {
 
   const row = {
     room_id: roomId,
-    user_id: null,
+    user_id: WALK_UP_USER_ID,
     title: title || 'Walk-up booking',
     start_time: startUtc,
     end_time: endUtc,
@@ -345,6 +345,12 @@ function subscribeToBookingChanges() {
 
 // Kigali is UTC+2 (Central Africa Time, no DST)
 const KIGALI_OFFSET_SECONDS = 2 * 60 * 60
+
+// Fallback user_id for walk-up bookings created at the physical panel.
+// The panel has no auth flow, so every walk-up is attributed to this admin
+// service account. Override via env var in production.
+const WALK_UP_USER_ID =
+  process.env.WALK_UP_ADMIN_USER_ID || '55867559-cedf-4152-b3f8-77f6d3edf198'
 
 function bookingToWirePayload(booking, userName) {
   // Convert ISO strings to Unix epoch seconds, shifted to Kigali local time
