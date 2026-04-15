@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import * as mqttBridge from './services/mqttBridge.js'
+import * as bookingSweep from './services/bookingSweep.js'
 import allocationRoutes from './routes/allocation.js'
 import allocateRoutes from './routes/allocate.js'
 import healthRoutes from './routes/health.js'
@@ -22,15 +23,21 @@ app.use('/api/users', usersRoutes)
 // Start MQTT bridge (ESP32 connection + Supabase realtime)
 mqttBridge.init()
 
+// Start booking reconciliation sweep — marks bookings whose end_time has
+// passed as 'completed' independently of the ESP32 status events.
+bookingSweep.start()
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('[Server] SIGTERM received, shutting down...')
+  bookingSweep.stop()
   mqttBridge.shutdown()
   process.exit(0)
 })
 
 process.on('SIGINT', () => {
   console.log('[Server] SIGINT received, shutting down...')
+  bookingSweep.stop()
   mqttBridge.shutdown()
   process.exit(0)
 })
