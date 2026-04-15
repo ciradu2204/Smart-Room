@@ -394,7 +394,7 @@ async function publishRoomSnapshot(roomId) {
   const nowIso = new Date().toISOString()
   const { data: bookings, error } = await supabase
     .from('bookings')
-    .select('id, user_id, start_time, end_time, status')
+    .select('id, user_id, title, start_time, end_time, status')
     .eq('room_id', roomId)
     .in('status', ['scheduled', 'active'])
     .gte('end_time', nowIso)
