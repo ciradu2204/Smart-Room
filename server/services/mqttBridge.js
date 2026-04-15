@@ -357,14 +357,17 @@ function bookingToWirePayload(booking, userName) {
   // so the ESP32 can use the values directly without timezone math.
   const startEpoch = Math.floor(new Date(booking.start_time).getTime() / 1000) + KIGALI_OFFSET_SECONDS
   const endEpoch   = Math.floor(new Date(booking.end_time).getTime()   / 1000) + KIGALI_OFFSET_SECONDS
+  // Keep the wire format tight — the ESP32 doesn't use userId or timezone,
+  // and trimming those is essential when the snapshot packs 20+ bookings
+  // into a single MQTT message (PubSubClient silently drops oversized
+  // payloads). title is an empty string instead of null so the ESP32 JSON
+  // parser sees the key reliably.
   return {
     bookingId: booking.id,
-    userId: booking.user_id,
-    userName,
-    title: booking.title || null,
+    userName: userName || '',
+    title: booking.title || '',
     startTime: startEpoch,
     endTime: endEpoch,
-    timezone: 'Africa/Kigali',
     status: booking.status,
   }
 }
