@@ -246,17 +246,23 @@ async function handleRoomStatus(roomId, payload) {
   const nowIso = new Date().toISOString()
   console.log(`[MQTT:Status] Room ${roomId}: state=${state} (esp32 ts=${timestamp}, server=${nowIso})`)
 
-  // Find current scheduled or active booking for this room
-  const { data: booking, error: findError } = await supabase
+  // Find the booking the ESP32 is reporting about. For "completed" events
+  // the booking's end_time is already in the past by the time we process
+  // the message, so we drop the end_time filter and take the most recent
+  // active booking whose start_time <= now. For "active" / "ghost_released"
+  // we still require end_time >= now.
+  let query = supabase
     .from('bookings')
     .select('id, status, user_id')
     .eq('room_id', roomId)
     .in('status', ['scheduled', 'active'])
     .lte('start_time', nowIso)
-    .gte('end_time', nowIso)
     .order('start_time', { ascending: false })
     .limit(1)
-    .single()
+  if (state !== 'completed') {
+    query = query.gte('end_time', nowIso)
+  }
+  const { data: booking, error: findError } = await query.single()
 
   if (findError || !booking) {
     // No current booking — could be a room with no booking active right now
