@@ -95,7 +95,13 @@ function subscribeToTopics() {
     else console.log(`[MQTT] Subscribed to ${TOPIC_PREFIX}/+/status`)
   })
 
-  // 2. Legacy sensor topic (kept for backwards compat)
+  // 2. Walk-up booking events: smartroom/+/walk-up
+  client.subscribe(`${TOPIC_PREFIX}/+/walk-up`, (err) => {
+    if (err) console.error('[MQTT] Subscribe error (walk-up):', err.message)
+    else console.log(`[MQTT] Subscribed to ${TOPIC_PREFIX}/+/walk-up`)
+  })
+
+  // 3. Legacy sensor topic (kept for backwards compat)
   client.subscribe(`${TOPIC_PREFIX}/rooms/+/sensors`, (err) => {
     if (err) console.error('[MQTT] Subscribe error (sensors):', err.message)
     else console.log(`[MQTT] Subscribed to ${TOPIC_PREFIX}/rooms/+/sensors`)
@@ -145,6 +151,12 @@ function handleMessage(topic, message) {
     return
   }
 
+  // smartroom/<roomId>/walk-up — ESP32 walk-up booking creation
+  if (parts.length === 3 && parts[2] === 'walk-up') {
+    handleWalkUpBooking(parts[1], payload)
+    return
+  }
+
   // smartroom/rooms/<roomId>/sensors — legacy sensor data
   if (parts.length === 4 && parts[1] === 'rooms' && parts[3] === 'sensors') {
     handleSensorMessage(topic, payload)
@@ -152,6 +164,56 @@ function handleMessage(topic, message) {
   }
 
   console.warn(`[MQTT] Unhandled topic: ${topic}`)
+}
+
+/**
+ * Handle walk-up booking creation from the ESP32.
+ *
+ * Topic:   smartroom/<roomId>/walk-up
+ * Payload: { roomId, bookingId, title, occupantName, startTime, endTime, timestamp }
+ *
+ * startTime/endTime are epoch seconds already shifted by +7200 (Kigali) on
+ * the device, so we subtract KIGALI_OFFSET_SECONDS to get true UTC epoch
+ * for the DB INSERT.
+ *
+ * The booking is inserted with user_id = null (no authenticated user at the
+ * panel) and a device-generated id so the ESP32's local wu_<epoch> id lines
+ * up with the DB row. The title carries the purpose picked on the panel.
+ */
+async function handleWalkUpBooking(roomId, payload) {
+  const { bookingId, title, startTime, endTime } = payload || {}
+  if (!bookingId || !startTime || !endTime) {
+    console.warn(`[MQTT:WalkUp] Missing fields for room ${roomId}`)
+    return
+  }
+
+  const startUtc = new Date((startTime - KIGALI_OFFSET_SECONDS) * 1000).toISOString()
+  const endUtc   = new Date((endTime   - KIGALI_OFFSET_SECONDS) * 1000).toISOString()
+
+  const row = {
+    room_id: roomId,
+    user_id: null,
+    title: title || 'Walk-up booking',
+    start_time: startUtc,
+    end_time: endUtc,
+    status: 'active',
+  }
+
+  const { error: insertError } = await supabase.from('bookings').insert(row)
+  if (insertError) {
+    console.error(`[MQTT:WalkUp] Insert failed for ${bookingId}:`, insertError.message)
+    return
+  }
+
+  console.log(`[MQTT:WalkUp] Inserted walk-up ${bookingId} (${title}) for room ${roomId}`)
+
+  // Mark room occupied and refresh snapshot
+  await supabase
+    .from('rooms')
+    .update({ is_occupied: true, last_sensor_ping: new Date().toISOString() })
+    .eq('id', roomId)
+
+  await publishRoomSnapshot(roomId)
 }
 
 /**
@@ -293,6 +355,7 @@ function bookingToWirePayload(booking, userName) {
     bookingId: booking.id,
     userId: booking.user_id,
     userName,
+    title: booking.title || null,
     startTime: startEpoch,
     endTime: endEpoch,
     timezone: 'Africa/Kigali',
