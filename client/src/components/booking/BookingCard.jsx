@@ -20,7 +20,8 @@ export default function BookingCard({
   const start = new Date(booking.start_time)
   const end = new Date(booking.end_time)
   const status = statusConfig[booking.status] || statusConfig.scheduled
-  const isUpcomingScheduled = !isPast && booking.status === 'scheduled'
+  // Can cancel if not past AND status is scheduled or active (ongoing)
+  const isCancellable = !isPast && ['scheduled', 'active'].includes(booking.status)
 
   const roomName = booking.rooms?.name || 'Room'
   const floor = booking.rooms?.floor
@@ -66,9 +67,10 @@ export default function BookingCard({
       )}
 
       {/* Actions */}
-      {isUpcomingScheduled && (onEdit || onCancel) && (
+      {isCancellable && (onEdit || onCancel) && (
         <div className="flex gap-2 mt-3">
-          {onEdit && (
+          {/* Edit only makes sense for future scheduled bookings, not ongoing */}
+          {onEdit && booking.status === 'scheduled' && new Date(booking.start_time) > new Date() && (
             <Button
               variant="secondary"
               size="sm"

@@ -177,8 +177,12 @@ async function handleRoomStatus(roomId, payload) {
     return
   }
 
-  const now = timestamp || new Date().toISOString()
-  console.log(`[MQTT:Status] Room ${roomId}: state=${state} at ${now}`)
+  // Use the server's current UTC time for queries — the ESP32's timestamp
+  // is only used for logging. The ESP32 sends Kigali-local epoch seconds
+  // which can't be reliably converted without knowing the offset, and for
+  // "is a booking active right now" we only need server time anyway.
+  const nowIso = new Date().toISOString()
+  console.log(`[MQTT:Status] Room ${roomId}: state=${state} (esp32 ts=${timestamp}, server=${nowIso})`)
 
   // Find current scheduled or active booking for this room
   const { data: booking, error: findError } = await supabase
@@ -186,8 +190,8 @@ async function handleRoomStatus(roomId, payload) {
     .select('id, status, user_id')
     .eq('room_id', roomId)
     .in('status', ['scheduled', 'active'])
-    .lte('start_time', now)
-    .gte('end_time', now)
+    .lte('start_time', nowIso)
+    .gte('end_time', nowIso)
     .order('start_time', { ascending: false })
     .limit(1)
     .single()
@@ -200,7 +204,7 @@ async function handleRoomStatus(roomId, payload) {
     if (state === 'ghost_released') {
       await supabase
         .from('rooms')
-        .update({ is_occupied: false, last_sensor_ping: now })
+        .update({ is_occupied: false, last_sensor_ping: nowIso })
         .eq('id', roomId)
     }
     return
@@ -209,7 +213,7 @@ async function handleRoomStatus(roomId, payload) {
   // Update booking status
   const { error: updateError } = await supabase
     .from('bookings')
-    .update({ status: state, updated_at: now })
+    .update({ status: state, updated_at: nowIso })
     .eq('id', booking.id)
 
   if (updateError) {
@@ -223,7 +227,7 @@ async function handleRoomStatus(roomId, payload) {
   const isOccupied = state === 'active'
   await supabase
     .from('rooms')
-    .update({ is_occupied: isOccupied, last_sensor_ping: now })
+    .update({ is_occupied: isOccupied, last_sensor_ping: nowIso })
     .eq('id', roomId)
 
   // Log the event
@@ -232,7 +236,7 @@ async function handleRoomStatus(roomId, payload) {
     room_id: roomId,
     booking_id: booking.id,
     user_id: booking.user_id,
-    details: { state, timestamp: now, source: 'esp32' },
+    details: { state, timestamp: nowIso, source: 'esp32' },
   }).then(({ error }) => {
     // Activity log is best-effort — don't fail if table doesn't exist yet
     if (error && !error.message.includes('does not exist')) {

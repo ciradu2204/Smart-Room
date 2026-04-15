@@ -110,15 +110,18 @@ export default function MyBookingsPage() {
       }
     }
 
+    // Upcoming: not yet ended AND status is scheduled or active
     const upcoming = filtered.filter(
-      (b) => new Date(b.start_time) > now && b.status === 'scheduled'
+      (b) =>
+        new Date(b.end_time) > now &&
+        ['scheduled', 'active'].includes(b.status)
     )
+    // History: either ended or already completed/cancelled/ghost_released
     const history = filtered.filter(
       (b) =>
-        new Date(b.start_time) <= now ||
-        ['completed', 'cancelled', 'ghost_released', 'active'].includes(b.status)
+        new Date(b.end_time) <= now ||
+        ['completed', 'cancelled', 'ghost_released'].includes(b.status)
     )
-    // Deduplicate: an 'active' booking with start_time > now shouldn't appear in both
     const upcomingIds = new Set(upcoming.map((b) => b.id))
     const dedupedHistory = history.filter((b) => !upcomingIds.has(b.id))
 

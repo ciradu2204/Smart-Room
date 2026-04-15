@@ -172,6 +172,55 @@ export default function BookingModal({
     onClose()
   }
 
+  // Book a 1-minute slot starting now (for hardware testing)
+  async function handleBookTest5Min() {
+    setError('')
+
+    if (!title.trim()) {
+      setError('Please add a title or reason for your booking.')
+      return
+    }
+
+    setSubmitting(true)
+
+    const bookingStart = new Date()
+    const bookingEnd = new Date(bookingStart.getTime() + 1 * 60 * 1000)
+
+    // Check overlap against existing bookings for this room
+    const conflict = existingBookings.find((b) => {
+      const bStart = new Date(b.start_time)
+      const bEnd = new Date(b.end_time)
+      return bookingStart < bEnd && bookingEnd > bStart
+    })
+
+    if (conflict) {
+      setSubmitting(false)
+      setError(
+        `This slot overlaps with an existing booking from ${formatTime(conflict.start_time)} to ${formatTime(conflict.end_time)}.`
+      )
+      return
+    }
+
+    const { error: dbError } = await supabase.from('bookings').insert({
+      room_id: roomId,
+      user_id: user.id,
+      start_time: bookingStart.toISOString(),
+      end_time: bookingEnd.toISOString(),
+      title: title || 'Test booking',
+      status: 'scheduled',
+    })
+
+    setSubmitting(false)
+
+    if (dbError) {
+      setError(dbError.message || 'Something went wrong. Please try again.')
+      return
+    }
+
+    toast.success('1-minute test booking created')
+    onClose()
+  }
+
   if (!isOpen) return null
 
   return (
@@ -257,6 +306,23 @@ export default function BookingModal({
               <p className="text-sm text-rose-700">{error}</p>
             </div>
           )}
+
+          {/* Test-only: 5-min booking starting now */}
+          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-amber-800">Testing</p>
+              <p className="text-xs text-amber-700">Book a 1-minute slot starting now</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleBookTest5Min}
+              disabled={submitting}
+            >
+              Book 1 min
+            </Button>
+          </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
