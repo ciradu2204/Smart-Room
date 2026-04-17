@@ -483,6 +483,13 @@ export function getClient() {
   return client
 }
 
+// Periodic snapshot refresh. Supabase realtime events cover INSERT/UPDATE/DELETE
+// but not every desync path (ESP32 booted during a broker outage, a missed
+// retained message, a dropped CALSLOT). Republishing every room's snapshot on
+// a timer closes those gaps without adding code on the device.
+const SNAPSHOT_REFRESH_INTERVAL_MS = 30 * 1000
+let snapshotRefreshTimer = null
+
 /**
  * Initialize the MQTT bridge.
  * Call once from server startup.
@@ -491,13 +498,25 @@ export function init() {
   console.log('[MQTT Bridge] Initializing...')
   connect()
   subscribeToBookingChanges()
-  console.log('[MQTT Bridge] Initialized')
+
+  // Start the periodic snapshot refresh loop.
+  snapshotRefreshTimer = setInterval(() => {
+    refreshAllRoomSnapshots().catch((err) =>
+      console.error('[MQTT:Snapshot] Periodic refresh failed:', err.message)
+    )
+  }, SNAPSHOT_REFRESH_INTERVAL_MS)
+
+  console.log(`[MQTT Bridge] Initialized (snapshot refresh every ${SNAPSHOT_REFRESH_INTERVAL_MS / 1000}s)`)
 }
 
 /**
  * Graceful shutdown.
  */
 export function shutdown() {
+  if (snapshotRefreshTimer) {
+    clearInterval(snapshotRefreshTimer)
+    snapshotRefreshTimer = null
+  }
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
