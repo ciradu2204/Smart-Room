@@ -340,6 +340,21 @@ function subscribeToBookingChanges() {
       { event: 'UPDATE', schema: 'public', table: 'bookings' },
       (payload) => publishBookingToDevice(payload.new)
     )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'bookings' },
+      async (payload) => {
+        // payload.old carries the deleted row. Refresh the snapshot for that
+        // room so the ESP32 drops the deleted booking from its slot table.
+        // Without this, a DB-level delete (admin action, test harness cleanup,
+        // cascaded deletes) leaves the ESP32 still showing the booking as
+        // reserved/active even though the dashboard has moved on.
+        const roomId = payload.old?.room_id
+        if (!roomId) return
+        console.log(`[Supabase RT] DELETE booking ${payload.old.id} from room ${roomId} — refreshing snapshot`)
+        await publishRoomSnapshot(roomId)
+      }
+    )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('[Supabase RT] Subscribed to booking changes')
