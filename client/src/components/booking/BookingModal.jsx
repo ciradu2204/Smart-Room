@@ -172,7 +172,7 @@ export default function BookingModal({
     onClose()
   }
 
-  // Book a 1-minute slot starting now (for hardware testing)
+  // Book a 2-minute slot starting now (for hardware testing)
   async function handleBookTest5Min() {
     setError('')
 
@@ -184,7 +184,7 @@ export default function BookingModal({
     setSubmitting(true)
 
     const bookingStart = new Date()
-    const bookingEnd = new Date(bookingStart.getTime() + 1 * 60 * 1000)
+    const bookingEnd = new Date(bookingStart.getTime() + 2 * 60 * 1000)
 
     // Check overlap against existing bookings for this room
     const conflict = existingBookings.find((b) => {
@@ -217,7 +217,7 @@ export default function BookingModal({
       return
     }
 
-    toast.success('1-minute test booking created')
+    toast.success('2-minute test booking created')
     onClose()
   }
 
@@ -311,7 +311,7 @@ export default function BookingModal({
           <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium text-amber-800">Testing</p>
-              <p className="text-xs text-amber-700">Book a 1-minute slot starting now</p>
+              <p className="text-xs text-amber-700">Book a 2-minute slot starting now</p>
             </div>
             <Button
               type="button"
@@ -320,7 +320,7 @@ export default function BookingModal({
               onClick={handleBookTest5Min}
               disabled={submitting}
             >
-              Book 1 min
+              Book 2 min
             </Button>
           </div>
 
