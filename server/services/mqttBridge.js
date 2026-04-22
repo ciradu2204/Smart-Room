@@ -461,10 +461,6 @@ async function publishBookingToDevice(booking) {
   const topic = `${TOPIC_PREFIX}/${booking.room_id}/booking`
   publish(topic, bookingToWirePayload(booking, userName))
   console.log(`[MQTT:Out] Published booking ${booking.id} to ${topic}`)
-
-  // Refresh the per-room snapshot so the ESP32's local calendar stays in sync
-  // with the database for the whole upcoming-bookings list.
-  await publishRoomSnapshot(booking.room_id)
 }
 
 // ───────────────────────────────────────────────
