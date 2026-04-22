@@ -119,7 +119,7 @@ export default function SchedulePage() {
             preferredCapacity: s.preferredCapacity,
             requiredFeatures: s.requiredFeatures,
           })),
-          weekStartDate: weekStart.toISOString(),
+          weekStartDate: format(weekStart, 'yyyy-MM-dd'),
         }),
       })
 

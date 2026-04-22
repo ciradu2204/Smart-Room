@@ -6,26 +6,6 @@ import { useToast } from '../ui/Toast'
 import { supabase } from '../../lib/supabase'
 import { formatTime } from '../../lib/utils'
 
-// Generate 30-minute increments from startHour to endHour
-function generateTimeOptions(startHour, endHour) {
-  const options = []
-  for (let h = startHour; h <= endHour; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      if (h === endHour && m > 0) break
-      const hh = String(h).padStart(2, '0')
-      const mm = String(m).padStart(2, '0')
-      options.push({ value: `${hh}:${mm}`, label: formatTimeLabel(h, m) })
-    }
-  }
-  return options
-}
-
-function formatTimeLabel(h, m) {
-  const period = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return `${h12}:${String(m).padStart(2, '0')} ${period}`
-}
-
 function computeDuration(startTime, endTime) {
   if (!startTime || !endTime) return null
   const [sh, sm] = startTime.split(':').map(Number)
@@ -39,8 +19,6 @@ function computeDuration(startTime, endTime) {
   if (mins > 0) parts.push(`${mins} minute${mins > 1 ? 's' : ''}`)
   return parts.join(' ')
 }
-
-const TIME_OPTIONS = generateTimeOptions(7, 21)
 
 export default function BookingModal({
   isOpen,
@@ -75,12 +53,6 @@ export default function BookingModal({
   const duration = useMemo(() => computeDuration(startTime, endTime), [startTime, endTime])
 
   const dateStr = selectedDay ? format(selectedDay, 'EEEE, MMM d, yyyy') : ''
-
-  // Filter end time options to only those after start
-  const endTimeOptions = useMemo(() => {
-    if (!startTime) return TIME_OPTIONS
-    return TIME_OPTIONS.filter((opt) => opt.value > startTime)
-  }, [startTime])
 
   // Booking limit hint
   const maxAdvance = profile?.role === 'faculty' ? 2 : 1
@@ -245,39 +217,31 @@ export default function BookingModal({
             <p className="text-sm text-gray-900 py-2">{dateStr}</p>
           </div>
 
-          {/* Time selectors */}
+          {/* Time inputs */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Start Time</label>
-              <select
+              <input
+                type="time"
                 className="input text-sm"
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value)
                   setError('')
                 }}
-              >
-                <option value="">Select...</option>
-                {TIME_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">End Time</label>
-              <select
+              <input
+                type="time"
                 className="input text-sm"
                 value={endTime}
                 onChange={(e) => {
                   setEndTime(e.target.value)
                   setError('')
                 }}
-              >
-                <option value="">Select...</option>
-                {endTimeOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 

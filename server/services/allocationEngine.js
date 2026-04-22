@@ -1,7 +1,6 @@
 import { supabase } from './supabaseAdmin.js'
-import { addDays, startOfWeek } from 'date-fns'
 
-// Map day names to date-fns day offsets from Monday-based week start
+// Map day names to offsets from Monday (the week start).
 const DAY_OFFSETS = {
   Monday: 0,
   Tuesday: 1,
@@ -12,25 +11,34 @@ const DAY_OFFSETS = {
   Sunday: 6,
 }
 
+// Kigali is UTC+2 year-round (no DST). Interpreting slot times in Kigali
+// local time is what users expect — if we let the server's OS zone decide
+// (Railway containers default to UTC), a client-sent Monday becomes the
+// previous Monday and bookings land a week in the past.
+const KIGALI_OFFSET = '+02:00'
+
 /**
- * Convert a schedule slot + week start date into ISO timestamps.
+ * Convert a schedule slot + week start date (YYYY-MM-DD) into ISO timestamps.
+ * All times are interpreted as Kigali-local; the returned ISO strings carry
+ * an explicit +02:00 offset so Postgres stores them unambiguously.
  */
 function slotToTimestamps(slot, weekStartDate) {
-  const weekStart = startOfWeek(new Date(weekStartDate), { weekStartsOn: 1 })
-  const dayDate = addDays(weekStart, DAY_OFFSETS[slot.dayOfWeek] ?? 0)
+  const [y, m, d] = weekStartDate.slice(0, 10).split('-').map(Number)
+  const dayOffset = DAY_OFFSETS[slot.dayOfWeek] ?? 0
+  // Compute the target day as a UTC date (no timezone math), then format.
+  const target = new Date(Date.UTC(y, m - 1, d + dayOffset))
+  const yyyy = target.getUTCFullYear()
+  const mm = String(target.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(target.getUTCDate()).padStart(2, '0')
+  const dayStr = `${yyyy}-${mm}-${dd}`
 
-  const [sh, sm] = slot.startTime.split(':').map(Number)
-  const [eh, em] = slot.endTime.split(':').map(Number)
-
-  const startTimestamp = new Date(dayDate)
-  startTimestamp.setHours(sh, sm, 0, 0)
-
-  const endTimestamp = new Date(dayDate)
-  endTimestamp.setHours(eh, em, 0, 0)
+  const pad = (s) => s.padStart(5, '0') // HH:MM → zero-padded
+  const startIso = `${dayStr}T${pad(slot.startTime)}:00${KIGALI_OFFSET}`
+  const endIso   = `${dayStr}T${pad(slot.endTime)}:00${KIGALI_OFFSET}`
 
   return {
-    start: startTimestamp.toISOString(),
-    end: endTimestamp.toISOString(),
+    start: new Date(startIso).toISOString(),
+    end:   new Date(endIso).toISOString(),
   }
 }
 

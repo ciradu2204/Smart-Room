@@ -5,22 +5,13 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
 const FEATURES = ['Projector', 'Whiteboard', 'Power outlets']
 
-function generateTimeOptions() {
-  const options = []
-  for (let h = 7; h <= 20; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      if (h === 20 && m > 30) break
-      const hh = String(h).padStart(2, '0')
-      const mm = String(m).padStart(2, '0')
-      const period = h >= 12 ? 'PM' : 'AM'
-      const h12 = h % 12 || 12
-      options.push({ value: `${hh}:${mm}`, label: `${h12}:${mm} ${period}` })
-    }
-  }
-  return options
+function addMinutes(hhmm, delta) {
+  const [h, m] = hhmm.split(':').map(Number)
+  const total = h * 60 + m + delta
+  const hh = Math.floor(total / 60) % 24
+  const mm = total % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }
-
-const TIME_OPTIONS = generateTimeOptions()
 
 function emptySlot() {
   return {
@@ -92,10 +83,9 @@ export default function ScheduleForm({ slots, onChange, onSave, saving }) {
     onChange(slots.map((s) => {
       if (s.id !== id) return s
       const updated = { ...s, [field]: value }
-      // If start time changed and end time is now invalid, bump end time forward
+      // If start time changed and end time is now invalid, bump end time 30min forward
       if (field === 'startTime' && updated.endTime <= value) {
-        const next = TIME_OPTIONS.find((opt) => opt.value > value)
-        if (next) updated.endTime = next.value
+        updated.endTime = addMinutes(value, 30)
       }
       return updated
     }))
@@ -180,29 +170,23 @@ export default function ScheduleForm({ slots, onChange, onSave, saving }) {
               {/* Start */}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-500">Start</label>
-                <select
+                <input
+                  type="time"
                   className="input text-sm !py-1.5"
                   value={slot.startTime}
                   onChange={(e) => updateSlot(slot.id, 'startTime', e.target.value)}
-                >
-                  {TIME_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* End */}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-500">End</label>
-                <select
+                <input
+                  type="time"
                   className="input text-sm !py-1.5"
                   value={slot.endTime}
                   onChange={(e) => updateSlot(slot.id, 'endTime', e.target.value)}
-                >
-                  {TIME_OPTIONS.filter((opt) => opt.value > slot.startTime).map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Capacity */}

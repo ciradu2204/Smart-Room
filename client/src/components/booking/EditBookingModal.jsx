@@ -3,24 +3,6 @@ import { format } from 'date-fns'
 import { Button, Input } from '../ui'
 import { formatTime } from '../../lib/utils'
 
-function generateTimeOptions(startHour, endHour) {
-  const options = []
-  for (let h = startHour; h <= endHour; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      if (h === endHour && m > 0) break
-      const hh = String(h).padStart(2, '0')
-      const mm = String(m).padStart(2, '0')
-      const period = h >= 12 ? 'PM' : 'AM'
-      const h12 = h % 12 || 12
-      options.push({
-        value: `${hh}:${mm}`,
-        label: `${h12}:${mm} ${period}`,
-      })
-    }
-  }
-  return options
-}
-
 function computeDuration(startTime, endTime) {
   if (!startTime || !endTime) return null
   const [sh, sm] = startTime.split(':').map(Number)
@@ -34,8 +16,6 @@ function computeDuration(startTime, endTime) {
   if (mins > 0) parts.push(`${mins} minute${mins > 1 ? 's' : ''}`)
   return parts.join(' ')
 }
-
-const TIME_OPTIONS = generateTimeOptions(7, 21)
 
 export default function EditBookingModal({ isOpen, onClose, booking, onSave }) {
   const [startTime, setStartTime] = useState('')
@@ -61,11 +41,6 @@ export default function EditBookingModal({ isOpen, onClose, booking, onSave }) {
   }, [isOpen, booking])
 
   const duration = useMemo(() => computeDuration(startTime, endTime), [startTime, endTime])
-
-  const endTimeOptions = useMemo(() => {
-    if (!startTime) return TIME_OPTIONS
-    return TIME_OPTIONS.filter((opt) => opt.value > startTime)
-  }, [startTime])
 
   const bookingDate = booking ? new Date(booking.start_time) : null
   const dateStr = bookingDate ? format(bookingDate, 'EEEE, MMM d, yyyy') : ''
@@ -134,29 +109,21 @@ export default function EditBookingModal({ isOpen, onClose, booking, onSave }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Start Time</label>
-              <select
+              <input
+                type="time"
                 className="input text-sm"
                 value={startTime}
                 onChange={(e) => { setStartTime(e.target.value); setError('') }}
-              >
-                <option value="">Select...</option>
-                {TIME_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">End Time</label>
-              <select
+              <input
+                type="time"
                 className="input text-sm"
                 value={endTime}
                 onChange={(e) => { setEndTime(e.target.value); setError('') }}
-              >
-                <option value="">Select...</option>
-                {endTimeOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
