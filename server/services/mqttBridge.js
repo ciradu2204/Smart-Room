@@ -187,10 +187,21 @@ async function handleWalkUpBooking(roomId, payload) {
     return
   }
 
+  // Panel must emit a UUIDv4 as bookingId. Persisting the row under the same
+  // id lets dashboard cancels/updates target the exact slot the device is
+  // tracking — without that shared id the device ends up with two slots per
+  // walk-up and the LCD never reflects cancellations. Reject legacy wu_* ids
+  // from un-updated firmware so a bad value doesn't fail the INSERT silently.
+  if (!UUID_RE.test(bookingId)) {
+    console.warn(`[MQTT:WalkUp] Invalid bookingId "${bookingId}" — expected UUID. Device firmware may be out of date.`)
+    return
+  }
+
   const startUtc = new Date((startTime - KIGALI_OFFSET_SECONDS) * 1000).toISOString()
   const endUtc   = new Date((endTime   - KIGALI_OFFSET_SECONDS) * 1000).toISOString()
 
   const row = {
+    id: bookingId,
     room_id: roomId,
     user_id: WALK_UP_USER_ID,
     title: title || 'Walk-up booking',
@@ -372,6 +383,8 @@ const KIGALI_OFFSET_SECONDS = 2 * 60 * 60
 // service account. Override via env var in production.
 const WALK_UP_USER_ID =
   process.env.WALK_UP_ADMIN_USER_ID || '55867559-cedf-4152-b3f8-77f6d3edf198'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function bookingToWirePayload(booking, userName) {
   // Convert ISO strings to Unix epoch seconds, shifted to Kigali local time
