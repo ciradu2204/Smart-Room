@@ -248,15 +248,20 @@ export default function WeeklyCalendar({
                     className="relative border-l border-gray-200"
                   >
                     {/* Clickable empty slots */}
-                    {HOURS.map((hour, hi) => (
-                      <TimeSlot
-                        key={hour}
-                        index={hi}
-                        actualHour={hour}
-                        day={day}
-                        onSelect={handleSlotClick}
-                      />
-                    ))}
+                    {HOURS.map((hour, hi) => {
+                      const slotEnd = new Date(day)
+                      slotEnd.setHours(hour + 1, 0, 0, 0)
+                      return (
+                        <TimeSlot
+                          key={hour}
+                          index={hi}
+                          actualHour={hour}
+                          day={day}
+                          onSelect={handleSlotClick}
+                          isPast={slotEnd <= now}
+                        />
+                      )
+                    })}
 
                     {/* Booking blocks */}
                     {dayBookings.map((b) => (
@@ -295,14 +300,20 @@ export default function WeeklyCalendar({
             >
               <div className="relative h-full">
                 {/* Clickable empty slots */}
-                {HOURS.map((hour, hi) => (
-                  <TimeSlot
-                    key={hour}
-                    hour={hi}
-                    day={days[selectedMobileDay]}
-                    onSelect={handleSlotClick}
-                  />
-                ))}
+                {HOURS.map((hour, hi) => {
+                  const slotEnd = new Date(days[selectedMobileDay])
+                  slotEnd.setHours(hour + 1, 0, 0, 0)
+                  return (
+                    <TimeSlot
+                      key={hour}
+                      index={hi}
+                      actualHour={hour}
+                      day={days[selectedMobileDay]}
+                      onSelect={handleSlotClick}
+                      isPast={slotEnd <= now}
+                    />
+                  )
+                })}
 
                 {/* Booking blocks */}
                 {getBookingsForDay(days[selectedMobileDay]).map((b) => (

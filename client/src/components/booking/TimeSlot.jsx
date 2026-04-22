@@ -1,6 +1,17 @@
-export default function TimeSlot({ index, actualHour, day, onSelect }) {
+export default function TimeSlot({ index, actualHour, day, onSelect, isPast }) {
   function handleClick() {
+    if (isPast) return
     onSelect({ day, hour: actualHour })
+  }
+
+  if (isPast) {
+    return (
+      <div
+        aria-label={`Past slot at ${actualHour}:00`}
+        className="absolute left-0 right-0 h-[60px] bg-gray-50/50 cursor-not-allowed"
+        style={{ top: `${index * 60}px` }}
+      />
+    )
   }
 
   return (

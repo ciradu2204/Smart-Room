@@ -93,8 +93,23 @@ export async function allocateRooms(userId, slots, weekStartDate) {
   // Track rooms already allocated in this batch to avoid double-booking
   const batchAllocated = new Map() // roomId -> [{ start, end }]
 
+  const nowIso = new Date().toISOString()
+
   for (const slot of slots) {
     const { start, end } = slotToTimestamps(slot, weekStartDate)
+
+    // Refuse to allocate into the past — on Wednesday, Monday/Tuesday of the
+    // current week are already gone, and booking backwards would clutter the
+    // room with sessions that can never be honoured.
+    if (end <= nowIso) {
+      allocations.push({
+        slot,
+        room: null,
+        allocated: false,
+        reason: 'This time slot has already passed',
+      })
+      continue
+    }
 
     // 2. Query candidate rooms: capacity >= preferred, ordered smallest first
     let query = supabase
